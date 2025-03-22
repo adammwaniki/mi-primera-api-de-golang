@@ -26,7 +26,15 @@ func (s *APIServer) Run() error{
 	// It matches the URL of each incoming request against a list of registered patterns and calls the
 	// handler for the pattern that most closely matches the URL.
 	// In general a pattern looks like [METHOD ][HOST]/[PATH]
+	// e.g. GET /users/{userID} // The single whitespace is important
+	// A pattern with no method matches every method
+	// A pattern with the method GET matches both GET and HEAD requests.
+	// Otherwise, the method must match exactly.
 	router := http.NewServeMux() // NewServeMux allocates and returns a new ServeMux.
+	router.HandleFunc("GET /users/{userID}", func(w http.ResponseWriter, r *http.Request) {
+		userID := r.PathValue("userID")
+		w.Write([]byte("User ID: " + userID))
+	})
 
 	// Declaring a new instance of the http.Server type from the stdlib
 	// There are more options to declare in here
@@ -35,9 +43,9 @@ func (s *APIServer) Run() error{
 		Addr: s.addr,
 		Handler: router,
 	}
-	
+
 	// Adding a log during testing to show if a server has started
-	log.Printf("Server has started on address: %s", s.addr)
+	log.Printf("Server has started on address: %s\n", s.addr)
 
 	return server.ListenAndServe() // Note: remember to upgrade to ListenAndServeTLS for HTTPS
 }
