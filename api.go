@@ -36,16 +36,62 @@ func (s *APIServer) Run() error{
 		w.Write([]byte("User ID: " + userID))
 	})
 
+	middlewareChain := MiddlewareChain( 
+		// If we swap the order here it will affect the output of logs
+		// e.g. in this case, swapping the order would mean that no logs will be written if the user
+		// is unauthorized
+		RequestLoggerMiddleware,
+		RequireAuthMiddleware,
+	)
 	// Declaring a new instance of the http.Server type from the stdlib
 	// There are more options to declare in here
 	// e.g. for ReadHeaderTimeout TLS config or HTTP/2 connections or Protocols etc. 
 	server := http.Server{
 		Addr: s.addr,
-		Handler: router,
+		//Handler: router, // We now wrap the handle with the middleware
+		//Handler: RequireAuthMiddleware(RequestLoggerMiddleware(router)), // To combine the two wrappers we can do it this way but it is very ugly
+		Handler: middlewareChain(router),
 	}
 
 	// Adding a log during testing to show if a server has started
-	log.Printf("Server has started on address: %s\n", s.addr)
+	log.Printf("Server has started on address %s\n", s.addr)
 
 	return server.ListenAndServe() // Note: remember to upgrade to ListenAndServeTLS for HTTPS
+}
+
+// Making sample middleware
+// Middlewares can be useful for tasks like logging or authentication etc.
+
+// In this case our middleware will be a logger
+// This logger will print out the request url and the method when the user makes a server request
+func RequestLoggerMiddleware(next http.Handler) http.HandlerFunc{
+	return func(w http.ResponseWriter, r *http.Request) {
+		log.Printf("method %s, path: %s", r.Method, r.URL.Path)
+		next.ServeHTTP(w, r)
+	}
+}
+
+// Making middleware to authenticate a route
+// e.g. making some routes only accessible to signed in users with jwt
+func RequireAuthMiddleware(next http.Handler) http.HandlerFunc{
+	return func(w http.ResponseWriter, r *http.Request) {
+		// check if the user is authenticated
+		token := r.Header.Get("Authorization")
+		if token != "Bearer token" {
+			http.Error(w, "Unauthorized", http.StatusUnauthorized)
+			return
+		}
+		next.ServeHTTP(w, r)
+	}
+}
+
+type Middlware func(http.Handler) http.HandlerFunc
+
+func MiddlewareChain(middlewares ...Middlware) Middlware{
+	return func(next http.Handler) http.HandlerFunc {
+		for i := len(middlewares)-1 ; i>= 0 ; i-- { // working from the end to the first because the order matters
+			next = middlewares[i](next) // making sure to call the next
+		} 
+		return next.ServeHTTP
+	}
 }
