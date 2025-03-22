@@ -36,6 +36,13 @@ func (s *APIServer) Run() error{
 		w.Write([]byte("User ID: " + userID))
 	})
 
+	// Implementing subroutes
+	// The subroutes will of course need their own handler functions
+	// This is just an illustration of how to make it accessible to the /users/{userID}
+	v1 := http.NewServeMux()
+	v1.Handle("/api/v1/", http.StripPrefix("/api/v1", router))
+
+	// Implementing the middlewares
 	middlewareChain := MiddlewareChain( 
 		// If we swap the order here it will affect the output of logs
 		// e.g. in this case, swapping the order would mean that no logs will be written if the user
